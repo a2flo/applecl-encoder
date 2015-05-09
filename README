@@ -1,0 +1,16 @@
+applecl-encoder
+---------------
+This tool was originally intended to produce SPIR 1.2 compatible LLVM bitcode from LLVM 3.5 bitcode.
+-> https://github.com/KhronosGroup/SPIR-Tools
+
+Since Apple's OpenCL binary format in OS X 10.9 and 10.10 is based on some mixture of LLVM 3.2 and 2.8, the original spir-encoder tool has been enhanced to support/output a bitcode binary in this format (bitcode version 0). The differences between LLVM/SPIR 1.2 and Apple's 3.2 format are otherwise relatively minor.
+
+This tool also uses code from http://opensource.apple.com/tarballs/llvmCore/ and http://llvm.org/releases/download.html#3.5.1
+In particular, it is currently based on http://opensource.apple.com/tarballs/llvmCore/llvmCore-3425.0.34.tar.gz and http://llvm.org/releases/3.5.1/llvm-3.5.1.src.tar.xz
+
+
+How To Build with LLVM
+----------------------
+1. copy "applecl-encoder" directory to [llvm3.5-path]/tools/
+2. add applecl-encoder to [llvm3.5-path]/tools/LLVMBuild.txt and [llvm3.5-path]/tools/Makefile
+3. build LLVM
