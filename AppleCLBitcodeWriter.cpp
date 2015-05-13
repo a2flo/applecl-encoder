@@ -37,8 +37,13 @@
 #include <map>
 using namespace llvm;
 
+#define GPU32_TRIPLE "gpu_32-apple-macosx10.9.0"
+#define GPU64_TRIPLE "gpu_64-apple-macosx10.9.0"
+#define CPU32_TRIPLE "i386-applecl-macosx10.9.0"
+#define CPU64_TRIPLE "x86_64-applecl-macosx10.9.0"
 #define GPU32_DATALAYOUT "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-f80:128:128-v16:16:16-v24:32:32-v32:32:32-v48:64:64-v64:64:64-v96:128:128-v128:128:128-v192:256:256-v256:256:256-v512:512:512-v1024:1024:1024-a64:64:64-f80:128:128-n8:16:32"
 #define GPU64_DATALAYOUT "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-f80:128:128-v16:16:16-v24:32:32-v32:32:32-v48:64:64-v64:64:64-v96:128:128-v128:128:128-v192:256:256-v256:256:256-v512:512:512-v1024:1024:1024-a64:64:64-f80:128:128-n8:16:32"
+#define CPU32_DATALAYOUT "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-f32:32:32-f64:32:64-v64:64:64-v128:128:128-a64:64:64-f80:128:128-n8:16:32"
 #define CPU64_DATALAYOUT "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a64:64:64-s0:64:64-f80:128:128-n8:16:32:64"
 
 /// These are manifest constants used by the bitcode writer. They do not need to
@@ -398,28 +403,21 @@ static unsigned getEncodedThreadLocalMode(const GlobalVariable *GV) {
 // Emit top-level description of module, including target triple, inline asm,
 // descriptors for global variables, and function prototype info.
 static void WriteModuleInfo(const Module *M, const ValueEnumerator &VE,
-                            BitstreamWriter &Stream) {
+                            BitstreamWriter &Stream, const bool encode_cpu) {
   // Emit various pieces of data attached to a module.
-  if (!M->getTargetTriple().empty())
-    WriteStringRecord(bitc::MODULE_CODE_TRIPLE, M->getTargetTriple(),
-                      0/*TODO*/, Stream);
-  if (!M->getDataLayoutStr().empty())
-  {
-    if (M->getTargetTriple().compare(0, 4, "spir") == 0)
-    {
-      bool Is64Bit = (M->getTargetTriple().compare(0, 6, "spir64") == 0);
-      const char *AppleCLDL = Is64Bit ? GPU64_DATALAYOUT : GPU32_DATALAYOUT;
+  const bool Is64Bit = (M->getTargetTriple().compare(0, 6, "spir64") == 0);
+  const char *AppleCLTriple = (!encode_cpu ?
+    (Is64Bit ? GPU64_TRIPLE : GPU32_TRIPLE) :
+    (Is64Bit ? CPU64_TRIPLE : CPU32_TRIPLE));
+  const char *AppleCLDL = (!encode_cpu ?
+    (Is64Bit ? GPU64_DATALAYOUT : GPU32_DATALAYOUT) :
+    (Is64Bit ? CPU64_DATALAYOUT : CPU32_DATALAYOUT));
+  
+  WriteStringRecord(bitc::MODULE_CODE_TRIPLE, AppleCLTriple, 0/*TODO*/, Stream);
 
-      // Output data layout using LLVM 3.2 string representation
-      WriteStringRecord(bitc::MODULE_CODE_DATALAYOUT, AppleCLDL,
-                        0/*TODO*/, Stream);
-    }
-    else
-    {
-      WriteStringRecord(bitc::MODULE_CODE_DATALAYOUT, M->getDataLayoutStr(),
-                        0/*TODO*/, Stream);
-    }
-  }
+  // Output data layout using LLVM 3.2 string representation
+  WriteStringRecord(bitc::MODULE_CODE_DATALAYOUT, AppleCLDL, 0/*TODO*/, Stream);
+
   if (!M->getModuleInlineAsm().empty())
     WriteStringRecord(bitc::MODULE_CODE_ASM, M->getModuleInlineAsm(),
                       0/*TODO*/, Stream);
@@ -1774,7 +1772,7 @@ static void WriteModuleUseLists(const Module *M, ValueEnumerator &VE,
 }
 
 /// WriteModule - Emit the specified module to the bitstream.
-static void WriteModule(const Module *M, BitstreamWriter &Stream) {
+static void WriteModule(const Module *M, BitstreamWriter &Stream, const bool encode_cpu) {
   Stream.EnterSubblock(bitc::MODULE_BLOCK_ID, 3);
 
   // Emit the version number if it is non-zero.
@@ -1799,7 +1797,7 @@ static void WriteModule(const Module *M, BitstreamWriter &Stream) {
 
   // Emit top-level description of module, including target triple, inline asm,
   // descriptors for global variables, and function prototype info.
-  WriteModuleInfo(M, VE, Stream);
+  WriteModuleInfo(M, VE, Stream, encode_cpu);
 
   // Emit constants.
   WriteModuleConstants(VE, Stream);
@@ -1812,10 +1810,6 @@ static void WriteModule(const Module *M, BitstreamWriter &Stream) {
 
   // Emit names for globals/functions etc.
   WriteValueSymbolTable(M->getValueSymbolTable(), VE, Stream);
-
-  // Emit use-lists.
-  /*if (EnablePreserveUseListOrdering)
-    WriteModuleUseLists(M, VE, Stream);*/
 
   // Emit function bodies.
   for (Module::const_iterator F = M->begin(), E = M->end(); F != E; ++F)
@@ -1902,7 +1896,7 @@ namespace AppleCL
 {
   /// WriteBitcodeToFile - Write the specified module to the specified output
   /// stream.
-  void WriteBitcodeToFile_AppleCL(const Module *M, raw_ostream &Out) {
+  void WriteBitcodeToFile_AppleCL(const Module *M, raw_ostream &Out, const bool encode_cpu) {
     SmallVector<char, 1024> Buffer;
     Buffer.reserve(256*1024);
 
@@ -1925,7 +1919,7 @@ namespace AppleCL
       Stream.Emit(0xD, 4);
 
       // Emit the module.
-      WriteModule(M, Stream);
+      WriteModule(M, Stream, encode_cpu);
     }
 
     if (TT.isOSDarwin())

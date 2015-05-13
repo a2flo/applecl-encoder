@@ -16,5 +16,5 @@ namespace llvm
 
 namespace AppleCL
 {
-  void WriteBitcodeToFile_AppleCL(const llvm::Module *M, llvm::raw_ostream &Out);
+  void WriteBitcodeToFile_AppleCL(const llvm::Module *M, llvm::raw_ostream &Out, const bool encode_cpu);
 }

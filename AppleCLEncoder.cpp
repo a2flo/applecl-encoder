@@ -30,6 +30,8 @@ static cl::opt<std::string>
 InputFilename(cl::Positional, cl::desc("<input bitcode file>"), cl::Required);
 static cl::opt<std::string>
 OutputFilename(cl::Positional, cl::desc("<output bitcode file>"), cl::Required);
+static cl::opt<bool>
+EncodeCPU("encode-cpu", cl::desc("encode for i386/x86_64 CPU (default is GPU with gpu_32/gpu_64)"));
 
 int main(int argc, char *argv[])
 {
@@ -57,7 +59,7 @@ int main(int argc, char *argv[])
   }
 
   // Output re-encoded module
-  AppleCL::WriteBitcodeToFile_AppleCL(Input, Output);
+  AppleCL::WriteBitcodeToFile_AppleCL(Input, Output, EncodeCPU);
 
   return 0;
 }
